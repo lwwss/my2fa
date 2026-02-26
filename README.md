@@ -1,3 +1,11 @@
+增加开启管理员登录需要2FA验证。
+方法：
+通过浏览器的控制台（F12）：
+1.开启 2FA:
+调用 await window.Admin2FA.setup()，你会得到一个 uri。你可以用手机的 Authenticator 扫描这个 URI（或者手动输入其返回的 secret）。
+调用 await window.Admin2FA.verifyAndEnable('手机上显示的6位验证码') 以完成开启绑定。
+2.关闭 2FA: 调用 await window.Admin2FA.disable('你的管理员密码')。
+
 # 🔐 2FA
 
 基于 Cloudflare Workers 的两步验证密钥管理系统。免费部署、全球加速、支持 PWA 离线使用。
