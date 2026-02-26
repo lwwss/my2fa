@@ -1,4 +1,46 @@
 /**
+ * 验证 TOTP 动态码 (使用纯 Web Crypto API 实现，无外部依赖)
+ */
+async function verifyTOTP(token, secretBase32) {
+    if (!token || token.length !== 6 || !/^\d+$/.test(token) || !secretBase32) return false;
+    try {
+        const base32chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+        let bits = '';
+        const secret = secretBase32.toUpperCase().replace(/\s/g, '');
+        for (let i = 0; i < secret.length; i++) {
+            const val = base32chars.indexOf(secret.charAt(i));
+            if (val === -1) continue;
+            bits += val.toString(2).padStart(5, '0');
+        }
+        const keyBytes = new Uint8Array(Math.floor(bits.length / 8));
+        for (let i = 0; i < keyBytes.length; i++) {
+            keyBytes[i] = parseInt(bits.substr(i * 8, 8), 2);
+        }
+
+        const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+        const timeStep = Math.floor(Date.now() / 1000 / 30);
+
+        // 允许当前、上一个、下一个时间窗口（共 90 秒容错区间）
+        for (let i = -1; i <= 1; i++) {
+            const counter = timeStep + i;
+            const counterBytes = new Uint8Array(8);
+            let temp = counter;
+            for (let j = 7; j >= 0; j--) {
+                counterBytes[j] = temp & 0xff;
+                temp = temp >> 8;
+            }
+            const signature = await crypto.subtle.sign('HMAC', key, counterBytes);
+            const hmac = new Uint8Array(signature);
+            const offset = hmac[hmac.length - 1] & 0xf;
+            const code = ((hmac[offset] & 0x7f) << 24 | (hmac[offset + 1] & 0xff) << 16 | (hmac[offset + 2] & 0xff) << 8 | (hmac[offset + 3] & 0xff)) % 1000000;
+            if (code.toString().padStart(6, '0') === token) return true;
+        }
+        return false;
+    } catch (e) {
+        return false;
+    }
+}
+/**
  * 身份验证工具模块
  * 提供 JWT Token 认证功能，支持自动过期
  */
@@ -490,8 +532,16 @@ export async function handleFirstTimeSetup(request, env) {
 			return createRateLimitResponse(rateLimitInfo, request);
 		}
 
-		const { password, confirmPassword } = await request.json();
+		const { password, confirmPassword, authMode = 'password', totpSecret } = await request.json();
 
+    // 验证登录模式参数
+if (!['password', 'password_2fa', '2fa_only'].includes(authMode)) {
+    throw new ValidationError('无效的认证模式');
+}
+if ((authMode === 'password_2fa' || authMode === '2fa_only') && (!totpSecret || totpSecret.length < 16)) {
+    throw new ValidationError('开启2FA需要提供有效的Base32密钥');
+}
+		
 		// 验证密码
 		if (!password || !confirmPassword) {
 			throw new ValidationError('请提供密码和确认密码', {
@@ -529,7 +579,11 @@ export async function handleFirstTimeSetup(request, env) {
 		// 存储到 KV
 		await env.SECRETS_KV.put(KV_USER_PASSWORD_KEY, passwordHash);
 		await env.SECRETS_KV.put(KV_SETUP_COMPLETED_KEY, new Date().toISOString());
-
+		await env.SECRETS_KV.put('auth_mode', authMode);
+if (totpSecret) {
+    await env.SECRETS_KV.put('admin_2fa_secret', totpSecret);
+}
+		
 		logger.info('首次设置完成', {
 			setupAt: new Date().toISOString(),
 			passwordEncrypted: true,
@@ -611,7 +665,7 @@ export async function handleLogin(request, env) {
 			return createRateLimitResponse(rateLimitInfo, request);
 		}
 
-		const { credential } = await request.json();
+		const { credential, totpCode } = await request.json();
 
 		if (!credential) {
 			throw new ValidationError('请提供密码', {
@@ -635,6 +689,23 @@ export async function handleLogin(request, env) {
 			});
 		}
 
+		const authMode = await env.SECRETS_KV.get('auth_mode') || 'password';
+		const totpSecret = await env.SECRETS_KV.get('admin_2fa_secret');
+
+		// 模式1或2：需要验证密码
+		if (authMode === 'password' || authMode === 'password_2fa') {
+ 		if (!credential) throw new ValidationError('请提供密码');
+    const isValid = await verifyPassword(credential, storedPasswordHash, env);
+   	if (!isValid) throw ErrorFactory.passwordIncorrect({ operation: 'login' });
+}
+
+// 模式2或3：需要验证2FA
+if (authMode === 'password_2fa' || authMode === '2fa_only') {
+    if (!totpCode) throw new ValidationError('请提供 6 位 2FA 动态码');
+    const isValidTOTP = await verifyTOTP(totpCode, totpSecret);
+    if (!isValidTOTP) throw new AuthenticationError('2FA 验证码错误或已过期');
+}
+		
 		// 验证密码
 		const isValid = await verifyPassword(credential, storedPasswordHash, env);
 
@@ -844,4 +915,22 @@ export function requiresAuth(pathname) {
 
 	// 所有其他路径默认需要认证（包括 /api/, /admin, /settings 等）
 	return true;
+}
+export async function handleGetAuthConfig(env) {
+    const authMode = await env.SECRETS_KV.get('auth_mode') || 'password';
+    return new Response(JSON.stringify({ success: true, authMode }), {
+        status: 200, headers: { 'Content-Type': 'application/json' }
+    });
+}
+
+export async function handleUpdateAuthConfig(request, env) {
+    const { authMode, totpSecret } = await request.json();
+    if (!['password', 'password_2fa', '2fa_only'].includes(authMode)) {
+        return createErrorResponse('配置失败', '无效的认证模式', 400, request);
+    }
+    await env.SECRETS_KV.put('auth_mode', authMode);
+    if (totpSecret) await env.SECRETS_KV.put('admin_2fa_secret', totpSecret);
+    return new Response(JSON.stringify({ success: true, message: '认证配置已更新' }), {
+        status: 200, headers: { 'Content-Type': 'application/json' }
+    });
 }
