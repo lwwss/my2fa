@@ -1,4 +1,4 @@
-﻿/**
+/**
  * UI页面生成模块 - 完整版本
  * 包含所有原版功能：搜索、导入导出、二维码、编辑删除等
  * 支持代码分割和懒加载优化
@@ -46,43 +46,35 @@ function getHTMLStart() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>2FA - 密钥管理器</title>
+  <title>mmm - 管理器</title>
 
-  <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
 
-  <!-- PWA Meta Tags -->
   <meta name="application-name" content="2FA">
-  <meta name="description" content="安全的两步验证密钥管理器，支持 TOTP、HOTP 验证码生成">
+  <meta name="description" content="mmm">
   <meta name="theme-color" content="#2196F3">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="2FA">
   
-  <!-- iOS Icons -->
   <link rel="apple-touch-icon" href="/icon-192.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/icon-192.png">
   <link rel="apple-touch-icon" sizes="152x152" href="/icon-192.png">
   <link rel="apple-touch-icon" sizes="120x120" href="/icon-192.png">
   
-  <!-- Favicon -->
   <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
   <link rel="shortcut icon" href="/icon-192.png">
   
-  <!-- Microsoft Tiles -->
   <meta name="msapplication-TileColor" content="#2196F3">
   <meta name="msapplication-TileImage" content="/icon-192.png">
   <meta name="msapplication-config" content="none">
   
-  <!-- PWA Display -->
   <meta name="display" content="standalone">
   
-  <!-- Security -->
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-  <!-- Theme Initialization - Must run before CSS to prevent FOUC -->
   <script>
     (function() {
       try {
@@ -101,7 +93,7 @@ function getHTMLStart() {
 }
 
 /**
- * HTML样式部分 - 包含所有原版样式
+ * HTML样式部分 - 包含所有原版样式及新增的 2FA 验证模态框
  */
 function getHTMLBody() {
 	return `
@@ -110,11 +102,9 @@ function getHTMLBody() {
     <div class="content">
       <div class="search-section">
         <div class="search-container">
-          <!-- 防止浏览器自动填充的隐藏输入框 -->
           <input type="text" name="prevent_autofill_username" style="display:none" tabindex="-1" autocomplete="new-password">
           <input type="password" name="prevent_autofill_password" style="display:none" tabindex="-1" autocomplete="new-password">
 
-          <!-- 搜索框和操作按钮的水平布局 -->
           <div class="search-action-row">
           <div class="search-input-wrapper">
             <span class="search-icon">🔍</span>
@@ -153,7 +143,6 @@ function getHTMLBody() {
         </div>
       </div>
 
-      <!-- 背景遮罩 -->
       <div class="menu-overlay" id="menuOverlay" onclick="closeActionMenu()"></div>
       
       <div id="loading" class="loading">
@@ -161,8 +150,7 @@ function getHTMLBody() {
       </div>
       
       <div id="secretsList" class="secrets-list" style="display: none;">
-        <!-- 密钥列表将在这里动态生成 -->
-      </div>
+        </div>
       
       <div id="emptyState" class="empty-state" style="display: none;">
         <div class="icon">🔑</div>
@@ -177,7 +165,6 @@ function getHTMLBody() {
   </div>
   
   
-  <!-- 二维码扫描器模态框 -->
   <div id="qrScanModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -195,7 +182,6 @@ function getHTMLBody() {
           </div>
         </div>
 
-        <!-- 连续扫描计数器 -->
         <div id="scanCounter" class="scan-counter" style="display: none;">
           已添加 <span id="scanCountNum">0</span> 个密钥
         </div>
@@ -209,7 +195,6 @@ function getHTMLBody() {
           <button class="btn btn-primary" onclick="retryCamera()" style="margin-top: 10px;">🔄 重试摄像头</button>
         </div>
 
-        <!-- 底部操作区：连续扫描 + 选择图片 -->
         <div class="scanner-bottom-actions">
           <label class="continuous-scan-inline">
             <input type="checkbox" id="continuousScanToggle" onchange="toggleContinuousScan()">
@@ -223,7 +208,6 @@ function getHTMLBody() {
     </div>
   </div>
   
-  <!-- 添加/编辑密钥模态框 -->
   <div id="secretModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -249,7 +233,6 @@ function getHTMLBody() {
           <input type="text" id="secretKey" required placeholder="输入16位或更长的Base32密钥" autocomplete="off">
         </div>
         
-        <!-- 高级参数区域 -->
         <div class="form-section">
           <div class="section-header">
             <label>
@@ -318,7 +301,6 @@ function getHTMLBody() {
     </div>
   </div>
 
-  <!-- 批量导入模态框 -->
   <div id="importModal" class="modal">
     <div class="modal-content import-modal-compact">
       <div class="modal-header">
@@ -326,10 +308,8 @@ function getHTMLBody() {
         <button class="close-btn" onclick="hideImportModal()">&times;</button>
       </div>
 
-      <!-- 隐藏的文件输入 -->
       <input type="file" id="importFileInput" accept=".txt,.csv,.json,.html,.htm,.2fas,.xml,.authpro,.encrypt" style="display: none;" onchange="handleImportFile(event)">
 
-      <!-- 智能输入区：文本框支持粘贴和拖拽 -->
       <div class="smart-import-zone" id="smartImportZone">
         <textarea id="importText" class="import-textarea-smart" rows="6"
                   placeholder="在此粘贴内容，或拖拽文件到这里...&#10;&#10;支持 OTPAuth、JSON、CSV、HTML 等格式"
@@ -340,7 +320,6 @@ function getHTMLBody() {
                   ondrop="handleFileDrop(event)"></textarea>
       </div>
 
-      <!-- 选择文件按钮 -->
       <div class="import-file-btn-wrapper">
         <button type="button" class="btn btn-info import-file-btn" onclick="document.getElementById('importFileInput').click()">
           📁 选择文件
@@ -348,7 +327,6 @@ function getHTMLBody() {
         <span class="import-file-hint">支持 TXT, JSON, CSV, HTML, 2FAS, XML, AuthPro, Encrypt</span>
       </div>
 
-      <!-- 已选文件信息徽章 -->
       <div class="file-info-badge" id="fileInfoBadge" style="display: none;">
         <span class="file-icon">📄</span>
         <span class="file-name" id="selectedFileName"></span>
@@ -356,12 +334,10 @@ function getHTMLBody() {
         <button type="button" class="file-clear-btn" onclick="clearSelectedFile(event)">✕</button>
       </div>
 
-      <!-- 小提示 -->
       <div class="import-tips">
         <span class="import-tip">💡 从 Google Authenticator 导入？<a href="javascript:void(0)" onclick="hideImportModal(); showQRScanner();">扫描迁移二维码</a></span>
       </div>
 
-      <!-- 格式说明（可折叠） -->
       <details class="import-format-details">
         <summary>📋 查看支持的格式</summary>
         <div class="import-format-help">
@@ -376,7 +352,6 @@ function getHTMLBody() {
         </div>
       </details>
 
-      <!-- 预览区域 -->
       <div id="importPreview" class="import-preview-compact" style="display: none;">
         <div class="import-preview-header">
           <span class="preview-title">预览</span>
@@ -389,7 +364,6 @@ function getHTMLBody() {
         <div id="importPreviewList" class="import-preview-list"></div>
       </div>
 
-      <!-- 操作按钮 -->
       <div class="form-actions import-form-actions">
         <button type="button" class="btn btn-secondary" onclick="hideImportModal()">取消</button>
         <button type="button" class="btn btn-primary" onclick="executeImport()" id="executeImportBtn" disabled>📥 导入</button>
@@ -397,7 +371,6 @@ function getHTMLBody() {
     </div>
   </div>
 
-  <!-- 还原配置模态框 -->
   <div id="restoreModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -433,8 +406,7 @@ function getHTMLBody() {
             <span>📋 备份预览</span>
           </div>
           <div id="backupPreviewContent" class="backup-preview-content">
-            <!-- 备份内容预览将在这里显示 -->
-          </div>
+            </div>
         </div>
       </div>
       
@@ -445,7 +417,6 @@ function getHTMLBody() {
     </div>
   </div>
   
-  <!-- 实用工具模态框 -->
   <div id="toolsModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -505,7 +476,6 @@ function getHTMLBody() {
     </div>
   </div>
 
-  <!-- 二维码生成工具模态框 -->
   <div id="qrGenerateModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -541,7 +511,6 @@ function getHTMLBody() {
     </div>
   </div>
   
-  <!-- Base32编解码工具模态框 -->
   <div id="base32Modal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -591,7 +560,6 @@ function getHTMLBody() {
     </div>
   </div>
   
-  <!-- 时间戳工具模态框 -->
   <div id="timestampModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -637,7 +605,6 @@ function getHTMLBody() {
     </div>
   </div>
   
-  <!-- 密钥检查器模态框 -->
   <div id="keyCheckModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -662,15 +629,13 @@ function getHTMLBody() {
       <div class="tool-section" id="keyCheckResult" style="display: none;">
         <div class="section-title">检查结果</div>
         <div id="checkResultContent" class="check-result" style="padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-          <!-- 结果内容将在这里动态生成 -->
-        </div>
+          </div>
       </div>
       
 
     </div>
   </div>
   
-  <!-- 二维码解析工具模态框 -->
   <div id="qrDecodeModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -722,7 +687,6 @@ function getHTMLBody() {
     </div>
   </div>
   
-  <!-- 密钥生成器模态框 -->
   <div id="keyGeneratorModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -758,7 +722,6 @@ function getHTMLBody() {
     </div>
   </div>
   
-  <!-- 二维码模态框 -->
   <div id="qrModal" class="modal" style="display: none;">
     <div class="modal-content">
       <div class="modal-header">
@@ -771,8 +734,7 @@ function getHTMLBody() {
       </div>
       
       <div class="qr-code-container">
-        <!-- 二维码将在这里动态生成 -->
-      </div>
+        </div>
       
       <div class="qr-info">
         💡 使用任意2FA应用扫描二维码即可添加此账户<br>
@@ -781,15 +743,13 @@ function getHTMLBody() {
     </div>
   </div>
 
-      <!-- 中间提示组件 -->
-  <div id="centerToast" class="center-toast">
+      <div id="centerToast" class="center-toast">
     <div class="toast-content">
       <div class="toast-icon">✅</div>
       <div class="toast-message">验证码已复制到剪贴板</div>
     </div>
   </div>
 
-  <!-- 导出格式选择模态框 -->
   <div id="exportFormatModal" class="modal">
     <div class="modal-content export-modal-compact">
       <div class="modal-header">
@@ -812,7 +772,6 @@ function getHTMLBody() {
         </div>
       </div>
 
-      <!-- 通用格式 -->
       <div class="format-section">
         <div class="format-section-title">通用格式</div>
         <div class="format-grid">
@@ -843,7 +802,6 @@ function getHTMLBody() {
         </div>
       </div>
 
-      <!-- 验证器应用 -->
       <div class="format-section">
         <div class="format-section-title">验证器应用</div>
         <div class="format-grid">
@@ -928,7 +886,6 @@ function getHTMLBody() {
         </div>
       </div>
 
-      <!-- 格式说明（可折叠） -->
       <details class="format-details">
         <summary>💡 查看格式说明与兼容性</summary>
         <div class="format-help-content">
@@ -957,7 +914,6 @@ function getHTMLBody() {
     </div>
   </div>
 
-  <!-- 二级格式选择模态框 -->
   <div id="subFormatModal" class="modal">
     <div class="modal-content sub-format-modal">
       <div class="modal-header">
@@ -965,12 +921,10 @@ function getHTMLBody() {
         <button class="close-btn" onclick="hideSubFormatModal()">&times;</button>
       </div>
       <div class="sub-format-list" id="subFormatList">
-        <!-- 动态生成格式选项 -->
-      </div>
+        </div>
     </div>
   </div>
 
-  <!-- FreeOTP 原版导出密码模态框 -->
   <div id="freeotpExportModal" class="modal">
     <div class="modal-content" style="max-width: 400px;">
       <div class="modal-header">
@@ -1000,7 +954,6 @@ function getHTMLBody() {
     </div>
   </div>
 
-  <!-- TOTP Authenticator 导出密码模态框 -->
   <div id="totpAuthExportModal" class="modal">
     <div class="modal-content" style="max-width: 400px;">
       <div class="modal-header">
@@ -1030,7 +983,6 @@ function getHTMLBody() {
     </div>
   </div>
 
-  <!-- 备份导出格式选择模态框 -->
   <div id="backupExportFormatModal" class="modal">
     <div class="modal-content" style="max-width: 600px;">
       <div class="modal-header">
@@ -1097,7 +1049,6 @@ function getHTMLBody() {
     </div>
   </div>
 
-  <!-- 登录模态框 -->
   <div id="loginModal" class="modal" style="display: none;">
     <div class="modal-content" style="max-width: 400px;">
       <h2 style="text-align: center; margin-bottom: 10px; color: var(--text-primary);">🔐 身份验证</h2>
@@ -1124,7 +1075,53 @@ function getHTMLBody() {
     </div>
   </div>
 
-  <!-- 页面底部链接 -->
+  <div id="admin2FAModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 400px;">
+      <div class="modal-header">
+        <h2>🛡️ 管理员 2FA 设置</h2>
+        <button class="close-btn" onclick="hideAdmin2FAModal()">&times;</button>
+      </div>
+
+      <div style="margin-bottom: 20px; padding: 15px; background: var(--bg-secondary); border-radius: 8px; font-size: 14px; text-align: center;">
+        <p style="margin: 0 0 10px 0; color: var(--text-primary); font-size: 16px;">
+          当前状态：<strong id="admin2FAStatusText">加载中...</strong>
+        </p>
+        <p style="margin: 0; font-size: 13px; color: var(--text-secondary);">
+          开启 2FA 后，管理员登录需要同时验证密码和动态验证码。
+        </p>
+      </div>
+
+      <div id="admin2FASetupSection" style="display: none;">
+        <div style="text-align: center; margin-bottom: 15px;">
+          <div id="admin2FAQrContainer" style="background: white; padding: 10px; border-radius: 8px; display: inline-block;"></div>
+          <p style="margin-top: 10px; font-size: 12px; color: var(--text-tertiary);">密钥: <span id="admin2FASecretDisplay" style="font-family: monospace;"></span></p>
+        </div>
+        <div class="form-group">
+          <input type="text" id="admin2FAVerifyToken" class="form-control" placeholder="输入 App 上的 6 位验证码" autocomplete="off" style="text-align: center; letter-spacing: 2px; font-size: 18px;">
+        </div>
+        <div class="form-actions" style="margin-top: 15px;">
+          <button type="button" class="btn btn-secondary" onclick="hideAdmin2FAModal()">取消</button>
+          <button type="button" class="btn btn-primary" onclick="verifyAndEnableAdmin2FA()">确认开启</button>
+        </div>
+      </div>
+
+      <div id="admin2FADisableSection" style="display: none;">
+        <div class="form-group">
+          <input type="password" id="admin2FADisablePassword" class="form-control" placeholder="输入管理员密码以确认关闭" autocomplete="new-password">
+        </div>
+        <div class="form-actions" style="margin-top: 15px;">
+          <button type="button" class="btn btn-secondary" onclick="hideAdmin2FAModal()">取消</button>
+          <button type="button" class="btn btn-danger" onclick="disableAdmin2FA()">确认关闭</button>
+        </div>
+      </div>
+
+      <div id="admin2FAActionSection" class="form-actions" style="justify-content: center;">
+         <button type="button" class="btn btn-primary" id="btnEnable2FA" onclick="startSetupAdmin2FA()" style="display: none; padding: 12px 24px;">开启 2FA 验证</button>
+         <button type="button" class="btn btn-danger" id="btnDisable2FA" onclick="showDisableAdmin2FA()" style="display: none; padding: 12px 24px;">关闭 2FA 验证</button>
+      </div>
+    </div>
+  </div>
+
   <footer class="page-footer">
     <div class="footer-content">
       <div class="footer-links">
@@ -1149,8 +1146,6 @@ function getHTMLBody() {
     </div>
   </footer>
 
-  <!-- 固定悬浮按钮组 -->
-  <!-- 操作菜单按钮 -->
   <div class="action-menu-float">
     <button class="main-action-button" id="mainActionBtn" onclick="toggleActionMenu()" title="操作菜单">
       ➕
@@ -1181,19 +1176,199 @@ function getHTMLBody() {
         <span class="item-icon">🔧</span>
         <span class="item-text">实用工具</span>
       </div>
+      <div class="submenu-item" onclick="showAdmin2FAModal(); closeActionMenu();">
+        <span class="item-icon">🛡️</span>
+        <span class="item-text">管理2FA验证</span>
+      </div>
     </div>
   </div>
 
-  <!-- 回到顶部按钮 -->
   <button class="back-to-top" id="backToTop" onclick="scrollToTop()" title="回到顶部" aria-label="回到顶部" type="button" style="display: none;">
     <span class="back-to-top-icon" aria-hidden="true">↑</span>
   </button>
 
-  <!-- 主题切换按钮 -->
   <button class="theme-toggle-float" onclick="toggleTheme()" title="当前：跟随系统（点击切换）" aria-label="切换主题" type="button">
     <span class="theme-icon" id="theme-icon" aria-hidden="true">🌓</span>
   </button>
 
+  <script>
+    function showAdmin2FAModal() {
+      const modal = document.getElementById('admin2FAModal');
+      if (!modal) return;
+      modal.style.display = 'flex';
+      setTimeout(() => modal.classList.add('show'), 10);
+      if (typeof disableBodyScroll === 'function') disableBodyScroll();
+      loadAdmin2FAStatus();
+    }
+
+    function hideAdmin2FAModal() {
+      const modal = document.getElementById('admin2FAModal');
+      if (!modal) return;
+      modal.classList.remove('show');
+      setTimeout(() => {
+        modal.style.display = 'none';
+        // 重置 UI
+        document.getElementById('admin2FASetupSection').style.display = 'none';
+        document.getElementById('admin2FADisableSection').style.display = 'none';
+        document.getElementById('admin2FAActionSection').style.display = 'flex';
+        document.getElementById('admin2FAQrContainer').innerHTML = '';
+        document.getElementById('admin2FAVerifyToken').value = '';
+        document.getElementById('admin2FADisablePassword').value = '';
+      }, 300);
+      if (typeof enableBodyScroll === 'function') enableBodyScroll();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+       const modal = document.getElementById('admin2FAModal');
+       if(modal) {
+           modal.addEventListener('click', function(e) {
+               if (e.target === this) hideAdmin2FAModal();
+           });
+       }
+    });
+
+    async function loadAdmin2FAStatus() {
+       try {
+           const statusText = document.getElementById('admin2FAStatusText');
+           const btnEnable = document.getElementById('btnEnable2FA');
+           const btnDisable = document.getElementById('btnDisable2FA');
+           
+           statusText.textContent = '加载中...';
+           statusText.style.color = 'var(--text-primary)';
+           btnEnable.style.display = 'none';
+           btnDisable.style.display = 'none';
+           
+           if (!window.Admin2FA) {
+               statusText.textContent = '请先登录';
+               return;
+           }
+           
+           const res = await window.Admin2FA.getStatus();
+           if (res.success) {
+               if (res.enabled) {
+                   statusText.textContent = '管理2FA验证已开启 ✅';
+                   statusText.style.color = 'var(--success)';
+                   btnDisable.style.display = 'block';
+               } else {
+                   statusText.textContent = '管理2FA验证未开启 ❌';
+                   statusText.style.color = 'var(--danger)';
+                   btnEnable.style.display = 'block';
+               }
+           } else {
+               statusText.textContent = '加载失败';
+           }
+       } catch (err) {
+           console.error(err);
+           document.getElementById('admin2FAStatusText').textContent = '加载出错 (请确保已登录)';
+       }
+    }
+
+    async function startSetupAdmin2FA() {
+       try {
+           document.getElementById('admin2FAActionSection').style.display = 'none';
+           const qrContainer = document.getElementById('admin2FAQrContainer');
+           qrContainer.innerHTML = '正在获取...';
+           document.getElementById('admin2FASetupSection').style.display = 'block';
+           
+           const res = await window.Admin2FA.setup();
+           if (res.success) {
+               document.getElementById('admin2FASecretDisplay').textContent = res.secret;
+               if (typeof qrcode !== 'undefined') {
+                   const qr = qrcode(0, 'M');
+                   qr.addData(res.uri);
+                   qr.make();
+                   qrContainer.innerHTML = qr.createImgTag(4, 10);
+                   qrContainer.querySelector('img').style.display = 'block';
+               } else {
+                   qrContainer.innerHTML = '<div style="color:var(--danger)">无法加载二维码，请手动输入密钥</div>';
+               }
+               document.getElementById('admin2FAVerifyToken').focus();
+           } else {
+               if(typeof showCenterToast === 'function') showCenterToast('❌', res.message || '获取配置失败');
+               hideAdmin2FAModal();
+           }
+       } catch (err) {
+           console.error(err);
+           if(typeof showCenterToast === 'function') showCenterToast('❌', '请求错误');
+       }
+    }
+
+    async function verifyAndEnableAdmin2FA(event) {
+        const token = document.getElementById('admin2FAVerifyToken').value.trim();
+        if (!token) {
+            if(typeof showCenterToast === 'function') showCenterToast('⚠️', '请输入 6 位验证码');
+            return;
+        }
+        
+        let btn;
+        let originalText;
+        if(event && event.target) {
+            btn = event.target;
+            originalText = btn.textContent;
+            btn.textContent = '验证中...';
+            btn.disabled = true;
+        }
+
+        try {
+            const res = await window.Admin2FA.verifyAndEnable(token);
+            if (res.success) {
+                if(typeof showCenterToast === 'function') showCenterToast('✅', '管理2FA验证已成功开启！');
+                hideAdmin2FAModal();
+            } else {
+                if(typeof showCenterToast === 'function') showCenterToast('❌', res.message || '验证码错误');
+            }
+        } catch (err) {
+           console.error(err);
+           if(typeof showCenterToast === 'function') showCenterToast('❌', '验证错误');
+        } finally {
+           if(btn) {
+               btn.textContent = originalText;
+               btn.disabled = false;
+           }
+        }
+    }
+
+    function showDisableAdmin2FA() {
+        document.getElementById('admin2FAActionSection').style.display = 'none';
+        document.getElementById('admin2FADisableSection').style.display = 'block';
+        document.getElementById('admin2FADisablePassword').focus();
+    }
+
+    async function disableAdmin2FA(event) {
+        const pwd = document.getElementById('admin2FADisablePassword').value.trim();
+        if (!pwd) {
+            if(typeof showCenterToast === 'function') showCenterToast('⚠️', '请输入管理员密码');
+            return;
+        }
+
+        let btn;
+        let originalText;
+        if(event && event.target) {
+            btn = event.target;
+            originalText = btn.textContent;
+            btn.textContent = '处理中...';
+            btn.disabled = true;
+        }
+
+        try {
+            const res = await window.Admin2FA.disable(pwd);
+            if (res.success) {
+                if(typeof showCenterToast === 'function') showCenterToast('✅', '管理2FA验证已成功关闭');
+                hideAdmin2FAModal();
+            } else {
+                if(typeof showCenterToast === 'function') showCenterToast('❌', res.message || '密码错误');
+            }
+        } catch (err) {
+           console.error(err);
+           if(typeof showCenterToast === 'function') showCenterToast('❌', '关闭失败');
+        } finally {
+           if(btn) {
+               btn.textContent = originalText;
+               btn.disabled = false;
+           }
+        }
+    }
+  </script>
 `;
 }
 
