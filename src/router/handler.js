@@ -39,6 +39,7 @@ import {
 	handleSetup2FA,
 	handleVerifyAndEnable2FA,
 	handleDisable2FA,
+	handleChangePassword, // 新增引入修改密码方法
 } from '../utils/auth.js';
 import { createPreflightResponse } from '../utils/security.js';
 import { getLogger } from '../utils/logger.js';
@@ -181,6 +182,11 @@ export async function handleRequest(request, env) {
  * 处理API请求
  */
 async function handleApiRequest(pathname, method, request, env) {
+	// 管理员修改密码 API
+	if (pathname === '/api/settings/password' && method === 'POST') {
+		return await handleChangePassword(request, env);
+	}
+
 	// 管理员 2FA 管理 API
 	if (pathname.startsWith('/api/admin/2fa')) {
 		if (pathname === '/api/admin/2fa/status' && method === 'GET') return handleGet2FAStatus(request, env);
