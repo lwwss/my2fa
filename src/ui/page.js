@@ -46,12 +46,12 @@ function getHTMLStart() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>mmm - 管理器</title>
+  <title>2FA - 密钥管理器</title>
 
   <link rel="manifest" href="/manifest.json">
 
   <meta name="application-name" content="2FA">
-  <meta name="description" content="mmm">
+  <meta name="description" content="安全的两步验证密钥管理器，支持 TOTP、HOTP 验证码生成">
   <meta name="theme-color" content="#2196F3">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -93,7 +93,7 @@ function getHTMLStart() {
 }
 
 /**
- * HTML样式部分 - 包含所有原版样式及新增的 2FA 验证模态框
+ * HTML样式部分 - 包含修改密码模态框
  */
 function getHTMLBody() {
 	return `
@@ -417,6 +417,110 @@ function getHTMLBody() {
     </div>
   </div>
   
+  <div id="adminSettingsModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>⚙️ 管理设置</h2>
+        <button class="close-btn" onclick="hideAdminSettingsModal()">&times;</button>
+      </div>
+      
+      <div class="tools-list">
+        <div class="tool-item" onclick="hideAdminSettingsModal(); showAdmin2FAModal();">
+          <div class="tool-icon">🛡️</div>
+          <div class="tool-content">
+            <div class="tool-title">2FA 验证</div>
+            <div class="tool-desc">开启或关闭管理员二次验证</div>
+          </div>
+        </div>
+        
+        <div class="tool-item" onclick="hideAdminSettingsModal(); showChangePasswordModal();">
+          <div class="tool-icon">🔑</div>
+          <div class="tool-content">
+            <div class="tool-title">修改密码</div>
+            <div class="tool-desc">修改当前管理员登录密码</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="changePasswordModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 400px;">
+      <div class="modal-header">
+        <h2>🔑 修改管理员密码</h2>
+        <button class="close-btn" onclick="hideChangePasswordModal()">&times;</button>
+      </div>
+      <div style="margin-bottom: 20px; padding: 15px; background: var(--bg-secondary); border-radius: 8px; font-size: 14px; text-align: center;">
+        <p style="margin: 0; font-size: 13px; color: var(--text-secondary);">
+          密码长度至少 8 位，并包含大写字母、小写字母、数字和特殊字符。
+        </p>
+      </div>
+      <div class="form-group">
+        <label for="oldPassword">旧密码</label>
+        <input type="password" id="oldPassword" class="form-control" placeholder="请输入当前密码" autocomplete="current-password">
+      </div>
+      <div class="form-group">
+        <label for="newPassword">新密码</label>
+        <input type="password" id="newPassword" class="form-control" placeholder="请输入新密码" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label for="confirmNewPassword">确认新密码</label>
+        <input type="password" id="confirmNewPassword" class="form-control" placeholder="请再次输入新密码" autocomplete="new-password">
+      </div>
+      <div class="form-actions" style="margin-top: 20px;">
+        <button type="button" class="btn btn-secondary" onclick="hideChangePasswordModal()">取消</button>
+        <button type="button" class="btn btn-primary" onclick="submitChangePassword(event)">确认修改</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="admin2FAModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 400px;">
+      <div class="modal-header">
+        <h2>🛡️ 管理员 2FA 设置</h2>
+        <button class="close-btn" onclick="hideAdmin2FAModal()">&times;</button>
+      </div>
+
+      <div style="margin-bottom: 20px; padding: 15px; background: var(--bg-secondary); border-radius: 8px; font-size: 14px; text-align: center;">
+        <p style="margin: 0 0 10px 0; color: var(--text-primary); font-size: 16px;">
+          当前状态：<strong id="admin2FAStatusText">加载中...</strong>
+        </p>
+        <p style="margin: 0; font-size: 13px; color: var(--text-secondary);">
+          开启 2FA 后，管理员登录需要同时验证密码和动态验证码。
+        </p>
+      </div>
+
+      <div id="admin2FASetupSection" style="display: none;">
+        <div style="text-align: center; margin-bottom: 15px;">
+          <div id="admin2FAQrContainer" style="background: white; padding: 10px; border-radius: 8px; display: inline-block;"></div>
+          <p style="margin-top: 10px; font-size: 12px; color: var(--text-tertiary);">密钥: <span id="admin2FASecretDisplay" style="font-family: monospace;"></span></p>
+        </div>
+        <div class="form-group">
+          <input type="text" id="admin2FAVerifyToken" class="form-control" placeholder="输入 App 上的 6 位验证码" autocomplete="off" style="text-align: center; letter-spacing: 2px; font-size: 18px;">
+        </div>
+        <div class="form-actions" style="margin-top: 15px;">
+          <button type="button" class="btn btn-secondary" onclick="hideAdmin2FAModal()">取消</button>
+          <button type="button" class="btn btn-primary" onclick="verifyAndEnableAdmin2FA()">确认开启</button>
+        </div>
+      </div>
+
+      <div id="admin2FADisableSection" style="display: none;">
+        <div class="form-group">
+          <input type="password" id="admin2FADisablePassword" class="form-control" placeholder="输入管理员密码以确认关闭" autocomplete="new-password">
+        </div>
+        <div class="form-actions" style="margin-top: 15px;">
+          <button type="button" class="btn btn-secondary" onclick="hideAdmin2FAModal()">取消</button>
+          <button type="button" class="btn btn-danger" onclick="disableAdmin2FA()">确认关闭</button>
+        </div>
+      </div>
+
+      <div id="admin2FAActionSection" class="form-actions" style="justify-content: center;">
+         <button type="button" class="btn btn-primary" id="btnEnable2FA" onclick="startSetupAdmin2FA()" style="display: none; padding: 12px 24px;">开启 2FA 验证</button>
+         <button type="button" class="btn btn-danger" id="btnDisable2FA" onclick="showDisableAdmin2FA()" style="display: none; padding: 12px 24px;">关闭 2FA 验证</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toolsModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -1075,53 +1179,6 @@ function getHTMLBody() {
     </div>
   </div>
 
-  <div id="admin2FAModal" class="modal" style="display: none;">
-    <div class="modal-content" style="max-width: 400px;">
-      <div class="modal-header">
-        <h2>🛡️ 管理员 2FA 设置</h2>
-        <button class="close-btn" onclick="hideAdmin2FAModal()">&times;</button>
-      </div>
-
-      <div style="margin-bottom: 20px; padding: 15px; background: var(--bg-secondary); border-radius: 8px; font-size: 14px; text-align: center;">
-        <p style="margin: 0 0 10px 0; color: var(--text-primary); font-size: 16px;">
-          当前状态：<strong id="admin2FAStatusText">加载中...</strong>
-        </p>
-        <p style="margin: 0; font-size: 13px; color: var(--text-secondary);">
-          开启 2FA 后，管理员登录需要同时验证密码和动态验证码。
-        </p>
-      </div>
-
-      <div id="admin2FASetupSection" style="display: none;">
-        <div style="text-align: center; margin-bottom: 15px;">
-          <div id="admin2FAQrContainer" style="background: white; padding: 10px; border-radius: 8px; display: inline-block;"></div>
-          <p style="margin-top: 10px; font-size: 12px; color: var(--text-tertiary);">密钥: <span id="admin2FASecretDisplay" style="font-family: monospace;"></span></p>
-        </div>
-        <div class="form-group">
-          <input type="text" id="admin2FAVerifyToken" class="form-control" placeholder="输入 App 上的 6 位验证码" autocomplete="off" style="text-align: center; letter-spacing: 2px; font-size: 18px;">
-        </div>
-        <div class="form-actions" style="margin-top: 15px;">
-          <button type="button" class="btn btn-secondary" onclick="hideAdmin2FAModal()">取消</button>
-          <button type="button" class="btn btn-primary" onclick="verifyAndEnableAdmin2FA()">确认开启</button>
-        </div>
-      </div>
-
-      <div id="admin2FADisableSection" style="display: none;">
-        <div class="form-group">
-          <input type="password" id="admin2FADisablePassword" class="form-control" placeholder="输入管理员密码以确认关闭" autocomplete="new-password">
-        </div>
-        <div class="form-actions" style="margin-top: 15px;">
-          <button type="button" class="btn btn-secondary" onclick="hideAdmin2FAModal()">取消</button>
-          <button type="button" class="btn btn-danger" onclick="disableAdmin2FA()">确认关闭</button>
-        </div>
-      </div>
-
-      <div id="admin2FAActionSection" class="form-actions" style="justify-content: center;">
-         <button type="button" class="btn btn-primary" id="btnEnable2FA" onclick="startSetupAdmin2FA()" style="display: none; padding: 12px 24px;">开启 2FA 验证</button>
-         <button type="button" class="btn btn-danger" id="btnDisable2FA" onclick="showDisableAdmin2FA()" style="display: none; padding: 12px 24px;">关闭 2FA 验证</button>
-      </div>
-    </div>
-  </div>
-
   <footer class="page-footer">
     <div class="footer-content">
       <div class="footer-links">
@@ -1176,9 +1233,9 @@ function getHTMLBody() {
         <span class="item-icon">🔧</span>
         <span class="item-text">实用工具</span>
       </div>
-      <div class="submenu-item" onclick="showAdmin2FAModal(); closeActionMenu();">
-        <span class="item-icon">🛡️</span>
-        <span class="item-text">管理2FA验证</span>
+      <div class="submenu-item" onclick="showAdminSettingsModal(); closeActionMenu();">
+        <span class="item-icon">⚙️</span>
+        <span class="item-text">管理设置</span>
       </div>
     </div>
   </div>
@@ -1192,6 +1249,114 @@ function getHTMLBody() {
   </button>
 
   <script>
+    // ================= 管理设置主模态框功能 =================
+    function showAdminSettingsModal() {
+      const modal = document.getElementById('adminSettingsModal');
+      if (!modal) return;
+      modal.style.display = 'flex';
+      setTimeout(() => modal.classList.add('show'), 10);
+      if (typeof disableBodyScroll === 'function') disableBodyScroll();
+    }
+
+    function hideAdminSettingsModal() {
+      const modal = document.getElementById('adminSettingsModal');
+      if (!modal) return;
+      modal.classList.remove('show');
+      setTimeout(() => { modal.style.display = 'none'; }, 300);
+      if (typeof enableBodyScroll === 'function') enableBodyScroll();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+       const modal = document.getElementById('adminSettingsModal');
+       if(modal) {
+           modal.addEventListener('click', function(e) {
+               if (e.target === this) hideAdminSettingsModal();
+           });
+       }
+    });
+
+    // ================= 修改密码功能 =================
+    function showChangePasswordModal() {
+      const modal = document.getElementById('changePasswordModal');
+      if (!modal) return;
+      modal.style.display = 'flex';
+      setTimeout(() => modal.classList.add('show'), 10);
+      if (typeof disableBodyScroll === 'function') disableBodyScroll();
+    }
+
+    function hideChangePasswordModal() {
+      const modal = document.getElementById('changePasswordModal');
+      if (!modal) return;
+      modal.classList.remove('show');
+      setTimeout(() => {
+        modal.style.display = 'none';
+        document.getElementById('oldPassword').value = '';
+        document.getElementById('newPassword').value = '';
+        document.getElementById('confirmNewPassword').value = '';
+      }, 300);
+      if (typeof enableBodyScroll === 'function') enableBodyScroll();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+       const modal = document.getElementById('changePasswordModal');
+       if(modal) {
+           modal.addEventListener('click', function(e) {
+               if (e.target === this) hideChangePasswordModal();
+           });
+       }
+    });
+
+    async function submitChangePassword(event) {
+        const oldPassword = document.getElementById('oldPassword').value;
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmNewPassword = document.getElementById('confirmNewPassword').value;
+
+        if (!oldPassword || !newPassword || !confirmNewPassword) {
+            if(typeof showCenterToast === 'function') showCenterToast('⚠️', '请填写所有密码字段');
+            return;
+        }
+
+        if (newPassword !== confirmNewPassword) {
+            if(typeof showCenterToast === 'function') showCenterToast('⚠️', '新密码与确认密码不一致');
+            return;
+        }
+
+        let btn;
+        let originalText;
+        if(event && event.target) {
+            btn = event.target;
+            originalText = btn.textContent;
+            btn.textContent = '修改中...';
+            btn.disabled = true;
+        }
+
+        try {
+            const res = await fetch('/api/settings/password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ oldPassword, newPassword, confirmPassword: confirmNewPassword })
+            });
+            
+            const data = await res.json();
+            if (res.ok && data.success) {
+                if(typeof showCenterToast === 'function') showCenterToast('✅', '密码修改成功！');
+                hideChangePasswordModal();
+            } else {
+                if(typeof showCenterToast === 'function') showCenterToast('❌', data.message || data.error || '密码修改失败');
+            }
+        } catch (err) {
+           console.error(err);
+           if(typeof showCenterToast === 'function') showCenterToast('❌', '请求错误');
+        } finally {
+           if(btn) {
+               btn.textContent = originalText;
+               btn.disabled = false;
+           }
+        }
+    }
+
+    // ================= 2FA 验证设置功能 =================
     function showAdmin2FAModal() {
       const modal = document.getElementById('admin2FAModal');
       if (!modal) return;
@@ -1246,11 +1411,11 @@ function getHTMLBody() {
            const res = await window.Admin2FA.getStatus();
            if (res.success) {
                if (res.enabled) {
-                   statusText.textContent = '管理2FA验证已开启 ✅';
+                   statusText.textContent = '已开启 ✅';
                    statusText.style.color = 'var(--success)';
                    btnDisable.style.display = 'block';
                } else {
-                   statusText.textContent = '管理2FA验证未开启 ❌';
+                   statusText.textContent = '未开启 ❌';
                    statusText.style.color = 'var(--danger)';
                    btnEnable.style.display = 'block';
                }
@@ -1312,7 +1477,7 @@ function getHTMLBody() {
         try {
             const res = await window.Admin2FA.verifyAndEnable(token);
             if (res.success) {
-                if(typeof showCenterToast === 'function') showCenterToast('✅', '管理2FA验证已成功开启！');
+                if(typeof showCenterToast === 'function') showCenterToast('✅', '2FA 已成功开启！');
                 hideAdmin2FAModal();
             } else {
                 if(typeof showCenterToast === 'function') showCenterToast('❌', res.message || '验证码错误');
@@ -1353,7 +1518,7 @@ function getHTMLBody() {
         try {
             const res = await window.Admin2FA.disable(pwd);
             if (res.success) {
-                if(typeof showCenterToast === 'function') showCenterToast('✅', '管理2FA验证已成功关闭');
+                if(typeof showCenterToast === 'function') showCenterToast('✅', '2FA 已成功关闭');
                 hideAdmin2FAModal();
             } else {
                 if(typeof showCenterToast === 'function') showCenterToast('❌', res.message || '密码错误');
