@@ -727,3 +727,73 @@ export async function handleDisable2FA(request, env) {
 		headers: { 'Content-Type': 'application/json' },
 	});
 }
+
+// ================= 管理员修改密码 API =================
+
+export async function handleChangePassword(request, env) {
+	const logger = getLogger(env);
+
+	try {
+		const { oldPassword, newPassword, confirmPassword } = await request.json();
+
+		if (!oldPassword || !newPassword || !confirmPassword) {
+			throw new ValidationError('请提供旧密码、新密码和确认密码', { missing: 'fields' });
+		}
+
+		if (newPassword !== confirmPassword) {
+			throw new ValidationError('新密码与确认密码不一致', { issue: 'password_mismatch' });
+		}
+
+		if (oldPassword === newPassword) {
+			throw new ValidationError('新密码不能与旧密码相同', { issue: 'same_password' });
+		}
+
+		const storedPasswordHash = await env.SECRETS_KV.get(KV_USER_PASSWORD_KEY);
+		if (!storedPasswordHash) {
+			throw new AuthorizationError('未找到管理员密码配置');
+		}
+
+		const isOldValid = await verifyPassword(oldPassword, storedPasswordHash, env);
+		if (!isOldValid) {
+			throw ErrorFactory.passwordIncorrect({ operation: 'change_password' });
+		}
+
+		// hashPassword 内部会自动验证新密码的强度
+		const newPasswordHash = await hashPassword(newPassword);
+		
+		await env.SECRETS_KV.put(KV_USER_PASSWORD_KEY, newPasswordHash);
+
+		// 生成新的 JWT 以保持登录状态
+		const jwtToken = await generateJWT(
+			{ auth: true, loginAt: new Date().toISOString() },
+			newPasswordHash,
+			JWT_EXPIRY_DAYS
+		);
+
+		const securityHeaders = getSecurityHeaders(request);
+
+		return new Response(
+			JSON.stringify({
+				success: true,
+				message: '密码修改成功',
+				token: jwtToken
+			}),
+			{
+				status: 200,
+				headers: {
+					...securityHeaders,
+					'Content-Type': 'application/json',
+					'Set-Cookie': createSetCookieHeader(jwtToken),
+				}
+			}
+		);
+
+	} catch (error) {
+		if (error instanceof ValidationError || error instanceof AuthenticationError) {
+			logError(error, logger, { operation: 'change_password' });
+			return errorToResponse(error, request);
+		}
+		logger.error('修改密码失败', { errorMessage: error.message }, error);
+		return createErrorResponse('修改失败', '处理修改请求时发生错误', 500, request);
+	}
+}
