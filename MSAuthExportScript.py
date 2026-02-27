@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Microsoft Authenticator 数据库导出为 otpauth:// 格式
-支持 Android (PhoneFactor) 和 iOS (.sqlite CoreData) 格式
-
-使用方法:
-  1. 将从 iPhone 导出的 .sqlite 文件放到与本脚本同一目录下。
-  2. 在 WinPython Command Prompt 中运行: python MSAuthExportScript.py
-"""
 
 import sqlite3
 import os
@@ -17,10 +9,6 @@ from datetime import datetime
 from urllib.parse import quote
 
 def base64_to_base32(base64_str):
-    """
-    将 Base64 编码的字符串转换为 Base32 编码
-    用于处理 Microsoft 个人账户的密钥
-    """
     try:
         decoded_bytes = base64.b64decode(base64_str)
         base32_alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
@@ -31,7 +19,6 @@ def base64_to_base32(base64_str):
         for byte in decoded_bytes:
             bits = (bits << 8) | byte
             bit_count += 8
-
             while bit_count >= 5:
                 bit_count -= 5
                 index = (bits >> bit_count) & 0x1F
@@ -51,7 +38,6 @@ def base64_to_base32(base64_str):
 script_dir = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = None
 
-# 查找同目录下的 .sqlite 文件或 PhoneFactor 文件
 for f in os.listdir(script_dir):
     if f.endswith('.sqlite') or f.lower() == 'phonefactor':
         if not f.endswith('-wal') and not f.endswith('-shm'):
@@ -64,8 +50,7 @@ if not DB_PATH:
         DB_PATH = std_path
 
 if not DB_PATH or not os.path.exists(DB_PATH):
-    print('错误: 未找到数据库文件！')
-    print('请将从 iPhone 导出的 .sqlite 文件放置在与此脚本相同的文件夹中。')
+    print('错误: 未找到数据库文件！请将从 iPhone 导出的 .sqlite 文件放置在脚本同级目录。')
     sys.exit(1)
 
 DB_PATH = os.path.normpath(DB_PATH)
@@ -78,7 +63,7 @@ output_filename = f'msauth-export-{timestamp}.txt'
 OUTPUT_FILE = os.path.join(script_dir, output_filename)
 
 print('=' * 60)
-print('Microsoft Authenticator 导出工具 (兼容 iOS/Android)')
+print('Microsoft Authenticator 导出工具 (深度诊断版)')
 print('=' * 60)
 print(f'读取数据库: {os.path.basename(DB_PATH)}')
 print(f'输出文件:   {output_filename}')
@@ -91,27 +76,48 @@ try:
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # 探测表结构 (iOS 使用 ZACCOUNT, Android 使用 accounts)
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ZACCOUNT'")
-    is_ios = cursor.fetchone() is not None
+    # 获取所有表名
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    all_tables = [t[0].upper() for t in cursor.fetchall()]
+
+    is_ios = 'ZACCOUNT' in all_tables
 
     if is_ios:
         print("\n-> 检测到 iPhone (iOS CoreData) 数据库结构")
         cursor.execute("PRAGMA table_info(ZACCOUNT)")
         cols = [info[1].upper() for info in cursor.fetchall()]
         
-        # 精确匹配字段名，避免误匹配到 ZHASSECRET 等布尔值字段
+        print(f"-> [诊断] ZACCOUNT 表的字段有: {cols}")
+        
         def get_col(possible_names, default_name):
             for name in possible_names:
                 if name in cols:
                     return name
             return default_name
 
-        c_name = get_col(['ZNAME', 'ZACCOUNTNAME'], 'ZNAME')
-        c_user = get_col(['ZUSERNAME', 'ZEMAIL'], 'ZUSERNAME')
-        # 严格过滤，确保提取的是真实的密钥列
-        c_sec  = get_col(['ZOATHSECRETKEY', 'ZOATH_SECRET_KEY', 'ZSECRETKEY', 'ZSECRET'], 'ZOATHSECRETKEY')
+        c_name = get_col(['ZNAME', 'ZACCOUNTNAME', 'ZISSUER'], 'ZNAME')
+        c_user = get_col(['ZUSERNAME', 'ZEMAIL', 'ZACCOUNT'], 'ZUSERNAME')
         c_type = get_col(['ZACCOUNTTYPE', 'ZTYPE', 'Z_TYPE'], None)
+        
+        # 智能寻找密钥字段，规避布尔值（如 ZHASSECRET）
+        c_sec = get_col(['ZOATHSECRETKEY', 'ZOATH_SECRET_KEY', 'ZSECRETKEY', 'ZSECRET', 'ZOATHSECRET', 'ZKEY'], None)
+        
+        if not c_sec:
+            for c in cols:
+                if ('SECRET' in c or 'KEY' in c) and 'HAS' not in c and 'TYPE' not in c:
+                    c_sec = c
+                    break
+                    
+        # 如果 ZACCOUNT 表里真的没有密钥字段，说明存在了关联表里
+        if not c_sec:
+            print("\n❌ 错误：在 ZACCOUNT 表中找不到密钥字段！")
+            print(f"-> [诊断] 数据库里的所有表：{all_tables}")
+            print("============================================================")
+            print("请复制从【-> [诊断] ZACCOUNT 表的字段有...】开始的全部输出发给我！")
+            print("你的版本可能将密钥存在了其他表（如 ZOATHTOKEN）中，我会立即为你更新关联查询代码。")
+            sys.exit(1)
+            
+        print(f"-> 成功定位字段：服务名={c_name}, 账号={c_user}, 密钥={c_sec}")
         
         if c_type:
             query = f"SELECT {c_name}, {c_user}, {c_sec}, {c_type} FROM ZACCOUNT WHERE {c_sec} IS NOT NULL"
@@ -144,28 +150,21 @@ try:
         username = username or ''
         account_type = account_type or 0
 
-        # 如果提取出的 secret_key 依然不是字符串（例如被错误识别的数字），则跳过以防报错
-        if not isinstance(secret_key, str):
-            continue
-
-        # 过滤掉空字符串
-        if not secret_key.strip():
+        if not isinstance(secret_key, str) or not secret_key.strip():
             continue
 
         if account_type == 1:
-            # Microsoft 个人账户，需要 Base64 → Base32 转换
             secret_cleaned = secret_key.replace(' ', '').replace('\t', '').replace('\n', '').replace('\r', '')
             secret = base64_to_base32(secret_cleaned)
             if not secret:
-                print(f'  [{index:2d}] 转换失败，跳过: {name} {username}')
                 continue
-            account_type_label = '(Type=1, Microsoft Base64)'
+            account_type_label = '(Type=1, Microsoft)'
         elif account_type == 2:
             secret = secret_key.replace(' ', '').replace('\t', '').replace('\n', '').replace('\r', '').upper()
             account_type_label = '(Type=2, SHA256)'
         else:
             secret = secret_key.replace(' ', '').replace('\t', '').replace('\n', '').replace('\r', '').upper()
-            account_type_label = '(Type=0, 标准 TOTP)'
+            account_type_label = '(Type=0, TOTP)'
 
         issuer_encoded = quote(name)
         account_encoded = quote(username) if username else ''
@@ -179,7 +178,7 @@ try:
             display_issuer = name[:20] if len(name) <= 22 else name[:20] + '..'
             display_account = username[:24] if len(username) <= 26 else username[:24] + '..'
             print(f'  [{index:2d}] {display_issuer.ljust(22)} {display_account.ljust(26)} {account_type_label}')
-        except (UnicodeEncodeError, UnicodeDecodeError):
+        except:
             print(f'  [{index:2d}] [Account {index}] {account_type_label}')
 
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
@@ -191,8 +190,6 @@ try:
     print('\n' + '=' * 60)
     print(f'✅ 成功导出 {len(otpauth_urls)} 个账户到文件: {output_filename}')
     print('=' * 60)
-    print('\n提示: 你现在可以将生成的 txt 文件导入到 2FA Manager 中了。')
-    print('安全警告: 导入完成后，请务必彻底删除数据库文件及生成的 txt 文本！\n')
 
 except sqlite3.Error as e:
     print(f'\nSQLite 数据库读取错误: {e}')
