@@ -19,7 +19,7 @@ from urllib.parse import quote
 def base64_to_base32(base64_str):
     """
     将 Base64 编码的字符串转换为 Base32 编码
-    用于处理 Microsoft 个人账户（account_type=1）的密钥
+    用于处理 Microsoft 个人账户的密钥
     """
     try:
         decoded_bytes = base64.b64decode(base64_str)
@@ -43,7 +43,6 @@ def base64_to_base32(base64_str):
 
         return ''.join(result)
     except Exception as e:
-        print(f'Base64 转换错误: {e}')
         return None
 
 # ==========================================
@@ -52,14 +51,13 @@ def base64_to_base32(base64_str):
 script_dir = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = None
 
-# 首先查找同目录下的 .sqlite 文件或 PhoneFactor 文件
+# 查找同目录下的 .sqlite 文件或 PhoneFactor 文件
 for f in os.listdir(script_dir):
     if f.endswith('.sqlite') or f.lower() == 'phonefactor':
         if not f.endswith('-wal') and not f.endswith('-shm'):
             DB_PATH = os.path.join(script_dir, f)
             break
 
-# 兼容原版的 databases/PhoneFactor 路径
 if not DB_PATH:
     std_path = os.path.join(script_dir, 'databases', 'PhoneFactor')
     if os.path.exists(std_path):
@@ -99,27 +97,32 @@ try:
 
     if is_ios:
         print("\n-> 检测到 iPhone (iOS CoreData) 数据库结构")
-        # 动态匹配 iOS 字段名，应对版本差异
         cursor.execute("PRAGMA table_info(ZACCOUNT)")
-        cols = [info[1] for info in cursor.fetchall()]
+        cols = [info[1].upper() for info in cursor.fetchall()]
         
-        c_name = next((c for c in cols if 'NAME' in c and 'USER' not in c), 'ZNAME')
-        c_user = next((c for c in cols if 'USER' in c), 'ZUSERNAME')
-        c_sec  = next((c for c in cols if 'SECRET' in c), 'ZOATH_SECRET_KEY')
-        c_type = next((c for c in cols if 'TYPE' in c), None)
+        # 精确匹配字段名，避免误匹配到 ZHASSECRET 等布尔值字段
+        def get_col(possible_names, default_name):
+            for name in possible_names:
+                if name in cols:
+                    return name
+            return default_name
+
+        c_name = get_col(['ZNAME', 'ZACCOUNTNAME'], 'ZNAME')
+        c_user = get_col(['ZUSERNAME', 'ZEMAIL'], 'ZUSERNAME')
+        # 严格过滤，确保提取的是真实的密钥列
+        c_sec  = get_col(['ZOATHSECRETKEY', 'ZOATH_SECRET_KEY', 'ZSECRETKEY', 'ZSECRET'], 'ZOATHSECRETKEY')
+        c_type = get_col(['ZACCOUNTTYPE', 'ZTYPE', 'Z_TYPE'], None)
         
         if c_type:
-            query = f"SELECT {c_name}, {c_user}, {c_sec}, {c_type} FROM ZACCOUNT WHERE {c_sec} IS NOT NULL AND {c_sec} != ''"
+            query = f"SELECT {c_name}, {c_user}, {c_sec}, {c_type} FROM ZACCOUNT WHERE {c_sec} IS NOT NULL"
         else:
-            # 旧版 iOS 可能没有 Type 字段，默认为 0 (标准 TOTP)
-            query = f"SELECT {c_name}, {c_user}, {c_sec}, 0 AS dummy_type FROM ZACCOUNT WHERE {c_sec} IS NOT NULL AND {c_sec} != ''"
+            query = f"SELECT {c_name}, {c_user}, {c_sec}, 0 AS dummy_type FROM ZACCOUNT WHERE {c_sec} IS NOT NULL"
     else:
         print("\n-> 检测到 Android 数据库结构")
         query = """
             SELECT name, username, oath_secret_key, account_type
             FROM accounts
-            WHERE oath_secret_key IS NOT NULL AND oath_secret_key != ''
-            ORDER BY account_type, name, username
+            WHERE oath_secret_key IS NOT NULL
         """
 
     cursor.execute(query)
@@ -137,12 +140,18 @@ try:
     for index, row in enumerate(rows, 1):
         name, username, secret_key, account_type = row
         
-        # 处理 None 值
         name = name or 'Unknown'
         username = username or ''
         account_type = account_type or 0
 
-        # 根据 account_type 处理密钥
+        # 如果提取出的 secret_key 依然不是字符串（例如被错误识别的数字），则跳过以防报错
+        if not isinstance(secret_key, str):
+            continue
+
+        # 过滤掉空字符串
+        if not secret_key.strip():
+            continue
+
         if account_type == 1:
             # Microsoft 个人账户，需要 Base64 → Base32 转换
             secret_cleaned = secret_key.replace(' ', '').replace('\t', '').replace('\n', '').replace('\r', '')
@@ -152,29 +161,20 @@ try:
                 continue
             account_type_label = '(Type=1, Microsoft Base64)'
         elif account_type == 2:
-            # 企业账户
             secret = secret_key.replace(' ', '').replace('\t', '').replace('\n', '').replace('\r', '').upper()
             account_type_label = '(Type=2, SHA256)'
         else:
-            # 标准 TOTP 账户
             secret = secret_key.replace(' ', '').replace('\t', '').replace('\n', '').replace('\r', '').upper()
             account_type_label = '(Type=0, 标准 TOTP)'
 
-        # URL 编码
         issuer_encoded = quote(name)
         account_encoded = quote(username) if username else ''
-
-        # 构建 label
         label = f'{issuer_encoded}:{account_encoded}' if username else issuer_encoded
-
-        # 算法选择
         algorithm = 'SHA256' if account_type == 2 else 'SHA1'
 
-        # 生成最终 URL
         otpauth_url = f'otpauth://totp/{label}?secret={secret}&digits=6&period=30&algorithm={algorithm}&issuer={issuer_encoded}'
         otpauth_urls.append(otpauth_url)
 
-        # 终端显示排版
         try:
             display_issuer = name[:20] if len(name) <= 22 else name[:20] + '..'
             display_account = username[:24] if len(username) <= 26 else username[:24] + '..'
@@ -182,7 +182,6 @@ try:
         except (UnicodeEncodeError, UnicodeDecodeError):
             print(f'  [{index:2d}] [Account {index}] {account_type_label}')
 
-    # 写入文件
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
         for url in otpauth_urls:
             f.write(url + '\n')
@@ -197,7 +196,6 @@ try:
 
 except sqlite3.Error as e:
     print(f'\nSQLite 数据库读取错误: {e}')
-    print('提示: 确保你导出的确实是包含数据的 Microsoft Authenticator 数据库文件。')
     sys.exit(1)
 except Exception as e:
     print(f'\n运行时错误: {e}')
