@@ -195,7 +195,7 @@ export async function handleRequest(request, env) {
 
 		// PWA Manifest
 		if (pathname === '/manifest.json') {
-			return createManifest(request);
+			return createManifest(request, env);
 		}
 
 		// Service Worker
