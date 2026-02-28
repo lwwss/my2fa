@@ -1,16 +1,14 @@
-增加入口伪装，默认/是bing壁纸
+# 增加入口伪装，默认/是bing壁纸
 
-部署完这段代码后，请前往你的 Cloudflare Dashboard 进行以下设置：
+1. Cloudflare Dashboard 选中你的 Worker (比如 my2fa) -> 点击 Settings (设置) -> Variables (变量/环境变量)。
 
-选中你的 Worker (比如 my2fa) -> 点击 Settings (设置) -> Variables (变量/环境变量)。
-
-添加一个新的环境变量：设置为密钥持久化
+2.添加一个新的环境变量，设置为密钥，才能持久化
 
 变量名 (Key)：SECRET_ENTRY_PATH
 
 值 (Value)：你想设置的隐藏入口名称，比如 aaa，或者更复杂一点的 my-secret-door-123（注意：开头不需要加斜杠 /）。
 
-保存并部署。
+3.保存并部署。
 
 此时：
 
@@ -19,21 +17,21 @@
 当你在浏览器地址栏精准输入 https://your-app.workers.dev/aaa 时，才会触发你熟悉的 my2fa 登录管理界面。
 
 
-增加开启管理员登录需要2FA验证，修改密码功能。
+# 增加开启管理员登录需要2FA验证，修改密码功能。
 
-方法：
+方法：f12或者后台管理设置
 
-f12或者后台管理设置
+1.通过浏览器的控制台（F12）：
 
-通过浏览器的控制台（F12）：
-
-1.开启 2FA:
+ （1）开启 2FA:
 
 调用 await window.Admin2FA.setup()，你会得到一个 uri。你可以用手机的 Authenticator 扫描这个 URI（或者手动输入其返回的 secret）。
 
 调用 await window.Admin2FA.verifyAndEnable('手机上显示的6位验证码') 以完成开启绑定。
 
-2.关闭 2FA: 调用 await window.Admin2FA.disable('你的管理员密码')。
+  （2）关闭 2FA: 调用 await window.Admin2FA.disable('你的管理员密码')。
+
+# 以下原版的内容 https://github.com/wuzf
 
 # 🔐 2FA
 
