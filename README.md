@@ -4,7 +4,7 @@
 
 选中你的 Worker (比如 my2fa) -> 点击 Settings (设置) -> Variables (变量/环境变量)。
 
-添加一个新的环境变量：
+添加一个新的环境变量：设置为密钥持久化
 
 变量名 (Key)：SECRET_ENTRY_PATH
 
