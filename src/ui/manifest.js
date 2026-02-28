@@ -6,18 +6,25 @@
 /**
  * 生成 Web App Manifest
  * @param {Request} request - HTTP 请求对象（用于获取主机名）
+ * @param {Object} env - 环境变量对象
  * @returns {Response} Manifest JSON 响应
  */
-export function createManifest(request) {
+export function createManifest(request, env) {
 	const url = new URL(request.url);
 	const baseUrl = `${url.protocol}//${url.host}`;
+
+	// 动态获取隐藏入口路径作为 PWA 启动 URL
+	let startUrl = '/';
+	if (env && env.SECRET_ENTRY_PATH) {
+		startUrl = `/${env.SECRET_ENTRY_PATH.replace(/^\//, '')}`;
+	}
 
 	// 简化的 Manifest 配置，确保最佳兼容性
 	const manifest = {
 		name: '2FA - 两步验证密钥管理器',
 		short_name: '2FA',
 		description: '安全的两步验证密钥管理器，支持 TOTP、HOTP 验证码生成',
-		start_url: '/',
+		start_url: startUrl,
 		display: 'standalone',
 		background_color: '#ffffff',
 		theme_color: '#2196F3',
@@ -50,19 +57,19 @@ export function createManifest(request) {
 
 		// 移除 screenshots（非必需）
 
-		// 简化的快捷方式（无图标）
+		// 简化的快捷方式（同时更新路径指向真实入口）
 		shortcuts: [
 			{
 				name: '添加密钥',
 				short_name: '添加',
 				description: '快速添加新的 2FA 密钥',
-				url: '/?action=add',
+				url: `${startUrl}?action=add`,
 			},
 			{
 				name: '扫描二维码',
 				short_name: '扫描',
 				description: '扫描二维码添加密钥',
-				url: '/?action=scan',
+				url: `${startUrl}?action=scan`,
 			},
 		],
 
@@ -76,7 +83,7 @@ export function createManifest(request) {
 		protocol_handlers: [
 			{
 				protocol: 'web+otpauth',
-				url: '/?otpauth=%s',
+				url: `${startUrl}?otpauth=%s`,
 			},
 		],
 	};
@@ -108,16 +115,12 @@ export function createDefaultIcon(size = 192) {
     </linearGradient>
   </defs>
   
-  <!-- 背景 -->
   <rect width="${size}" height="${size}" rx="${size * 0.15}" fill="url(#grad)"/>
   
-  <!-- 锁图标 -->
   <g transform="translate(${size * 0.3}, ${size * 0.25})">
-    <!-- 锁身 -->
     <rect x="0" y="${size * 0.2}" width="${size * 0.4}" height="${size * 0.3}"
           rx="${size * 0.05}" fill="white" opacity="0.95"/>
 
-    <!-- 锁扣 -->
     <path d="M ${size * 0.05} ${size * 0.2}
              L ${size * 0.05} ${size * 0.15}
              A ${size * 0.1} ${size * 0.1} 0 0 1 ${size * 0.35} ${size * 0.15}
@@ -125,13 +128,11 @@ export function createDefaultIcon(size = 192) {
           fill="none" stroke="white" stroke-width="${size * 0.04}"
           stroke-linecap="round" opacity="0.95"/>
     
-    <!-- 钥匙孔 -->
     <circle cx="${size * 0.2}" cy="${size * 0.32}" r="${size * 0.04}" fill="#2196F3"/>
     <rect x="${size * 0.18}" y="${size * 0.32}" width="${size * 0.04}" height="${size * 0.08}" 
           rx="${size * 0.01}" fill="#2196F3"/>
   </g>
   
-  <!-- 2FA 文字 -->
   <text x="${size / 2}" y="${size * 0.85}" 
         font-family="Arial, sans-serif" 
         font-size="${size * 0.12}" 
